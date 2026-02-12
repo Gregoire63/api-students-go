@@ -676,11 +676,27 @@ bouton.addEventListener('click', () => {
         title: "🔄 Fetch API - Requêtes",
         xp: 300,
         lesson: `
-            <h3>Qu'est-ce que Fetch ?</h3>
-            <p>Fetch permet de faire des requêtes HTTP pour récupérer ou envoyer des données à une API.</p>
-            
+        <h3>Qu'est-ce que Fetch ?</h3>
+        <p>
+            <strong>Fetch</strong> est une fonction JavaScript qui permet d'envoyer des requêtes HTTP pour 
+            récupérer ou envoyer des données depuis/vers une API. Cela signifie que ton code peut communiquer 
+            avec un serveur, obtenir des informations et les afficher dynamiquement dans ta page web.
+        </p>
+
+        <h3>Comment utiliser l'URL dans Fetch ?</h3>
+        <p>
+            Pour que Fetch fonctionne, tu dois lui fournir l'URL de l'API à laquelle tu veux accéder. 
+            Cette URL indique au navigateur où envoyer la requête.
+        </p>
+        <br/>
+        <h4>💡 Astuce</h4>
+        <p style="font-style: italic; ">
+            Dans notre exercice, l'API est au même endroit que le code front, 
+            donc il n'est <strong>pas nécessaire</strong> de passer une URL complète. 
+            Tu peux simplement utiliser le chemin relatif, comme <code>/api/posts</code>.
+        </p>
             <h3>Requête GET simple</h3>
-            <pre><code>fetch('http://localhost:3000/api/posts')
+            <pre><code>fetch('/api/posts')
     .then(response => response.json())
     .then(data => {
         console.log(data);
@@ -692,7 +708,7 @@ bouton.addEventListener('click', () => {
             <h3>Avec async/await (moderne)</h3>
             <pre><code>async function getPosts() {
     try {
-        const response = await fetch('http://localhost:3000/api/posts');
+        const response = await fetch('/api/posts');
         const data = await response.json();
         console.log(data);
     } catch (error) {
@@ -701,7 +717,7 @@ bouton.addEventListener('click', () => {
 }</code></pre>
 
             <h3>Requête POST</h3>
-            <pre><code>fetch('http://localhost:3000/api/login', {
+            <pre><code>fetch('/api/login', {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json'
@@ -741,8 +757,6 @@ document.querySelector("ul").appendChild(li);</code></pre>
     <ul id="posts-list"></ul>
     
     <script>
-        const API_URL = 'http://localhost:3000';
-        
         // 1. Sélectionnez le bouton et la liste
         // 2. Ajoutez un événement click
         // 3. Faites un fetch GET vers /posts
@@ -779,7 +793,7 @@ document.querySelector("ul").appendChild(li);</code></pre>
             <p>Les cookies stockent des données côté client. Ils sont automatiquement envoyés avec chaque requête au serveur.</p>
             
             <h3>Cookies avec credentials</h3>
-            <pre><code>fetch('http://localhost:3000/api/login', {
+            <pre><code>fetch('/api/login', {
     method: 'POST',
     credentials: 'include',  // Important !
     headers: {
@@ -803,7 +817,7 @@ document.querySelector("ul").appendChild(li);</code></pre>
             </ol>
 
             <h3>Requête authentifiée</h3>
-            <pre><code>fetch('http://localhost:3000/api/posts', {
+            <pre><code>fetch('/api/posts', {
     credentials: 'include'  // Envoie le cookie automatiquement
 });</code></pre>
         `,
@@ -831,8 +845,6 @@ document.querySelector("ul").appendChild(li);</code></pre>
     <div id="message"></div>
     
     <script>
-        const API_URL = 'http://localhost:3000';
-        
         // 1. Sélectionnez le formulaire
         // 2. Écoutez l'événement submit
         // 3. Faites un fetch POST /login avec credentials: 'include'
@@ -862,7 +874,7 @@ document.querySelector("ul").appendChild(li);</code></pre>
                 const code = script.textContent;
 
                 // Vérifie fetch POST sur /login avec credentials
-                const hasFetchLogin = /fetch\(['"`]http:\/\/localhost:3000\/api\/login['"`],\s*{[^}]*method:\s*['"]POST['"][^}]*credentials:\s*['"]include['"]/s.test(code);
+                const hasFetchLogin = /fetch\(['"`]\/api\/login['"`],\s*{[^}]*method:\s*['"]POST['"][^}]*credentials:\s*['"]include['"]/s.test(code);
                 if (!hasFetchLogin) {
                     return { success: false, message: "❌ Utilisez fetch POST sur /login avec credentials: 'include'" };
                 }
@@ -892,7 +904,7 @@ document.querySelector("ul").appendChild(li);</code></pre>
             <h3>Exemple complet</h3>
             <pre><code>async function createPost(title, content) {
     try {
-        const response = await fetch('http://localhost:3000/api/posts', {
+        const response = await fetch('/api/posts', {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -942,8 +954,6 @@ const content = document.getElementById('content').value;</code></pre>
     <div id="result"></div>
     
     <script>
-        const API_URL = 'http://localhost:3000';
-        
         // 1. Écoutez le submit du formulaire
         // 2. Récupérez title et content
         // 3. Faites un fetch POST /posts avec credentials
@@ -1128,8 +1138,6 @@ let token = sessionStorage.getItem('token');</code></pre>
     <!-- Pensez à : login, liste posts, formulaire création, logout -->
     
     <script>
-        const API_URL = 'http://localhost:3000';
-        
         // Écrivez votre code JavaScript ici
         // Utilisez tout ce que vous avez appris !
         
