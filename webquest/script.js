@@ -29,6 +29,7 @@ function saveCurrentCode() {
  * Sauvegarde les trois fichiers d'un coup (utile au changement de niveau)
  */
 function saveAllFiles() {
+    if(!levels[currentLevel]) return
     const levelId = levels[currentLevel].id;
     Object.entries(codeStates).forEach(([file, code]) => {
         localStorage.setItem(`code_level_${levelId}_${file}`, code);
@@ -434,7 +435,7 @@ function getLastUnlockedLevelIndex() {
 
     // Si tous les niveaux sont complétés → rester sur le dernier
     if (nextLevelIndex >= levels.length) {
-        return levels.length - 1;
+        return Math.max(0,levels.length - 1);
     }
 
     return nextLevelIndex;
