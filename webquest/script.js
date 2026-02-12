@@ -1,5 +1,5 @@
 // État de l'application
-let currentLevel = 0;
+let currentLevel = -1;
 let completedLevels = JSON.parse(localStorage.getItem('completedLevels') || '[]');
 let totalXP = parseInt(localStorage.getItem('totalXP') || '0');
 let currentFile = 'html';
