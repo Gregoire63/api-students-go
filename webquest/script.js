@@ -489,3 +489,63 @@ document.addEventListener('keydown', (e) => {
         runCode();
     }
 });
+
+
+let logsInterval = null;
+
+function openApiLogs() {
+    const modal = document.getElementById('api-logs-modal');
+    modal.classList.remove('hidden');
+
+    fetchLogs(); // chargement immédiat
+
+    logsInterval = setInterval(fetchLogs, 2000); // refresh auto
+}
+
+function closeApiLogs() {
+    const modal = document.getElementById('api-logs-modal');
+    modal.classList.add('hidden');
+
+    clearInterval(logsInterval);
+    logsInterval = null;
+}
+function colorizeLogs(logs) {
+    return logs.map(line => {
+        const match = line.match(/Status\s(\d{3})/);
+
+        if (!match) return line;
+
+        const code = parseInt(match[1], 10);
+        let cssClass = '';
+
+        if (code >= 500) cssClass = 'status-5xx';
+        else if (code >= 400) cssClass = 'status-4xx';
+        else if (code >= 300) cssClass = 'status-3xx';
+        else if (code >= 200) cssClass = 'status-2xx';
+
+        return line.replace(
+            `Status ${code}`,
+            `Status <span class="log-status ${cssClass}">${code}</span>`
+        );
+    }).join('<br>');
+}
+async function fetchLogs() {
+    try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+
+        const output = document.getElementById('api-logs-output');
+
+        if(!data.logs) return         document.getElementById('api-logs-output').textContent =
+            "Aucun logs pour le moment";
+            
+        output.innerHTML = colorizeLogs(data.logs);
+
+        // auto-scroll en bas
+        output.scrollTop = output.scrollHeight;
+
+    } catch (e) {
+        document.getElementById('api-logs-output').textContent =
+            "❌ Impossible de charger les logs API";
+    }
+}

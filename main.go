@@ -18,6 +18,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Stockage des logs
+const MAX_LOGS = 200
+var (
+	logBuffer []string
+	logMu     sync.Mutex
+)
+
 // Configuration
 const (
 	JWT_SECRET = "votre_secret_super_securise_changez_moi"
@@ -91,15 +98,30 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
+
 		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: 200}
+
+		var logs string
 
 		if r.Method == "POST" || r.Method == "PUT" {
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(strings.NewReader(string(body)))
-			fmt.Printf("[%s] %s\nBody: %s\n", r.Method, r.URL.Path, string(body))
+
+			logs = fmt.Sprintf("[%s] %s\nBody: %s",
+				r.Method,
+				r.URL.Path,
+				string(body),
+			)
+
 		} else {
-			fmt.Printf("[%s] %s\n", r.Method, r.URL.Path)
+			logs = fmt.Sprintf("[%s] %s",
+				r.Method,
+				r.URL.Path,
+			)
 		}
+
+		addLog(logs)
+		fmt.Print(logs)
 
 		next(lrw, r)
 
@@ -115,7 +137,10 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			statusColor = color.New(color.FgGreen)
 		}
 
-		statusColor.Printf("Status: %d\n\n", lrw.statusCode)
+		statusLog := fmt.Sprintf("Status %d", lrw.statusCode)
+
+		addLog(statusLog)
+		statusColor.Print(statusLog)
 	}
 }
 
@@ -169,6 +194,7 @@ func main() {
 	mux.HandleFunc("/api/me", loggingMiddleware(corsMiddleware(authMiddleware(handleMe))))
     mux.HandleFunc("/api/posts", loggingMiddleware(corsMiddleware(authIfNeeded(handlePosts, "POST"))))
 	mux.HandleFunc("/api/posts/", loggingMiddleware(corsMiddleware(authMiddleware(handlePostByID))))
+	mux.HandleFunc("/api/logs", corsMiddleware(handleLogs))
 	mux.HandleFunc("/api/", loggingMiddleware(corsMiddleware(handleRoot)))
 
 
@@ -279,10 +305,20 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func logExplain(format string, a ...interface{}) {
-	fmt.Printf("[EXPLAIN] "+format+"\n", a...)
+	addLog("[EXPLAIN] " + fmt.Sprintf(format, a...))
 }
 
 // Handlers
+
+func handleLogs(w http.ResponseWriter, r *http.Request) {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"logs": logBuffer,
+	})
+}
+
 func handleRoot(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{
 		"message": "API WebQuest - Apprendre le Frontend",
@@ -648,4 +684,21 @@ func hashPassword(password string) string {
         log.Fatal("Impossible de hasher le mot de passe :", err)
     }
     return string(hashed)
+}
+
+func addLog(message string) {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	entry := fmt.Sprintf("[%s] %s", timestamp, message)
+
+	fmt.Println(entry) // console Render
+
+	logBuffer = append(logBuffer, entry)
+
+	// Garder seulement les MAX_LOGS dernières lignes
+	if len(logBuffer) > MAX_LOGS {
+		logBuffer = logBuffer[len(logBuffer)-MAX_LOGS:]
+	}
 }

@@ -421,3 +421,70 @@ body {
         font-size: 16px;
     }
 }
+
+.api-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.api-modal.hidden {
+    display: none;
+}
+
+.api-modal-content {
+    width: 90%;
+    max-width: 800px;
+    height: 70%;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
+
+.api-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #334155;
+    background: #020617;
+}
+
+.api-modal-header h3 {
+    margin: 0;
+    font-size: 14px;
+}
+
+.api-modal-header button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#api-logs-output {
+    flex: 1;
+    margin: 0;
+    padding: 16px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    color: #e2e8f0;
+    background: #020617;
+}
+.log-status {
+    font-weight: bold;
+}
+
+.status-2xx { color: #22c55e; }
+.status-3xx { color: #eab308; }
+.status-4xx { color: #f97316; }
+.status-5xx { color: #ef4444; }

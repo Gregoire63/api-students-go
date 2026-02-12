@@ -9,6 +9,16 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
+<div id="api-logs-modal" class="api-modal hidden">
+    <div class="api-modal-content">
+        <div class="api-modal-header">
+            <h3>Console API</h3>
+            <button onclick="closeApiLogs()">✖</button>
+        </div>
+
+        <pre id="api-logs-output">Chargement des logs...</pre>
+    </div>
+</div>
 <body>
     <!-- Header avec progression -->
     <header class="game-header">
@@ -55,6 +65,7 @@
                     <button onclick="runCode()" class="btn-primary">▶ Exécuter</button>
                     <button onclick="resetCode()" class="btn-secondary">Reset</button>
                     <button onclick="validateLevel()" class="btn-success">✓ Valider</button>
+                    <button onclick="openApiLogs()" class="btn-secondary">Voir l'API</button>
                 </div>
 
                 <div class="preview-panel">
