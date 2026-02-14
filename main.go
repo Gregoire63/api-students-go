@@ -186,6 +186,66 @@ func openBrowser(url string) {
 func main() {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+    // Réponse HTML basique pour simuler un tableau de bord
+    w.Header().Set("Content-Type", "text/html")
+w.Write([]byte(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tableau de bord</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background: #f0f8ff; 
+        }
+
+        h1 { 
+            color: #2c3e50; 
+        }
+
+        .success { 
+            color: green; 
+            font-weight: bold; 
+        }
+
+        button {
+            margin-top: 30px;
+            padding: 12px 25px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #3498db, #6c5ce7);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎉 Connexion réussie !</h1>
+    <p class="success">Vous êtes maintenant sur le tableau de bord.</p>
+    <p>Dans un vrai projet, cette page afficherait vos données utilisateur.</p>
+    <button onclick="window.history.back()">← Retour à l'exercice</button>
+</body>
+</html>
+`))
+})
+
     fs := http.FileServer(http.Dir("./webquest"))
 	mux.Handle("/", fs)
 	mux.HandleFunc("/api/register", loggingMiddleware(corsMiddleware(handleRegister)))

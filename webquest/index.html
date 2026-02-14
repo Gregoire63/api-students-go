@@ -8,77 +8,105 @@
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.41.0/min/vs/loader.js"></script>
 </head>
-<div id="api-logs-modal" class="api-modal hidden">
+
+<body>
+
+<!-- ── Écran de chargement ── -->
+<div id="loading-screen">
+    <div class="loader-content">
+        <img src="/logo.webp" alt="WebQuest" class="loader-logo" />
+        <div class="loader-title">WebQuest</div>
+        <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
+        <div class="loader-hint">Chargement de l'éditeur…</div>
+    </div>
+</div>
+
+<!-- Modal API Logs -->
+<div id="api-logs-modal" class="api-modal hidden" role="dialog" aria-modal="true" aria-labelledby="api-modal-title">
     <div class="api-modal-content">
         <div class="api-modal-header">
-            <h3>Console API</h3>
-            <button onclick="closeApiLogs()">✖</button>
+            <h3 id="api-modal-title">🔌 Console API</h3>
+            <button onclick="closeApiLogs()" aria-label="Fermer la console">✖</button>
         </div>
-
         <pre id="api-logs-output">Chargement des logs...</pre>
     </div>
 </div>
-<body>
-    <!-- Header avec progression -->
-    <header class="game-header">
-        <div class="container">
-            
-            <h1 style="display: flex; align-items: center;"><img src="/logo.png" style="width:60px; margin-right:15px"/> WebQuest</h1>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progress-fill"></div>
-                <span class="progress-text" id="progress-text">Niveau 0/12</span>
-            </div>
-            <div class="score">
-                <span id="score">0</span> XP
-            </div>
+
+<!-- Header -->
+<header class="game-header">
+    <div class="container">
+        <h1 class="site-title">
+            <img src="/logo.webp" alt="WebQuest logo" class="site-logo" />
+            WebQuest
+        </h1>
+        <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-fill" id="progress-fill"></div>
+            <span class="progress-text" id="progress-text">Niveau 0/12</span>
         </div>
-    </header>
+        <div class="score" aria-label="Score XP">
+            <span id="score">0</span> XP
+        </div>
+    </div>
+</header>
 
-    <main class="container">
-        <!-- Menu de navigation des niveaux -->
-        <nav class="level-nav" id="level-nav">
-            <!-- Généré dynamiquement par JS -->
-        </nav>
+<main class="container">
+    <!-- Navigation niveaux -->
+    <nav class="level-nav" id="level-nav" aria-label="Niveaux"></nav>
 
-        <!-- Zone de contenu du niveau -->
-        <div class="level-container">
-            <div class="lesson-panel" id="lesson-panel">
+    <!-- Zone principale -->
+    <div class="workspace" id="workspace">
+
+        <!-- Panneau Cours (collapsible) -->
+        <aside class="lesson-panel" id="lesson-panel" aria-label="Cours">
+            <div class="lesson-header">
                 <h2 id="lesson-title">Chargement...</h2>
+            </div>
+            <div class="lesson-body" id="lesson-body">
                 <div id="lesson-content"></div>
             </div>
+        </aside>
 
-            <div class="exercise-panel">
-                <h3>Mission</h3>
-                <div id="exercise-description"></div>
-                
-                <div class="code-editor">
-                    <div class="editor-tabs">
-                        <button class="tab active" data-file="html">index.html</button>
-                        <button class="tab" data-file="css">style.css</button>
-                        <button class="tab" data-file="js">script.js</button>
-                    </div>
-                    <textarea id="code-editor" spellcheck="false"></textarea>
+        <!-- Panneau Exercice -->
+        <section class="exercise-panel" aria-label="Exercice">
+
+            <div id="exercise-description"></div>
+
+            <!-- Éditeur -->
+            <div class="code-editor-wrapper">
+                <div class="editor-tabs" role="tablist">
+                    <button class="tab active" data-file="html" role="tab" aria-selected="true">index.html</button>
+                    <button class="tab" data-file="css" role="tab" aria-selected="false">style.css</button>
+                    <button class="tab" data-file="js" role="tab" aria-selected="false">script.js</button>
                 </div>
-
-                <div class="editor-actions">
-                    <button onclick="runCode()" class="btn-primary">▶ Exécuter</button>
-                    <button onclick="resetCode()" class="btn-secondary">Reset</button>
-                    <button onclick="validateLevel()" class="btn-success">✓ Valider</button>
-                    <button onclick="openApiLogs()" class="btn-secondary">Voir l'API</button>
-                </div>
-
-                <div class="preview-panel">
-                    <h4>Aperçu</h4>
-                    <iframe id="preview"></iframe>
-                </div>
-
-                <div id="feedback" class="feedback"></div>
+                <div id="code-editor"></div>
             </div>
-        </div>
-    </main>
 
-    <script src="levels.js"></script>
-    <script src="script.js"></script>
+            <!-- Actions -->
+            <div class="editor-actions">
+                <button onclick="runCode()" class="btn-primary">▶ Exécuter</button>
+                <button onclick="resetCode()" class="btn-secondary">⟳ Reset</button>
+                <button id="api-btn" onclick="openApiLogs()" class="btn-secondary" style="display:none">Console de l'API</button>
+                <button id="next-level-btn" onclick="goToNextLevel()" class="btn-success" disabled>Niveau suivant →</button>
+            </div>
+
+            <div id="feedback" class="feedback" role="alert" aria-live="polite"></div>
+
+            <!-- Aperçu -->
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <h4>👁 Aperçu</h4>
+                    <span class="preview-hint">Ctrl+s pour exécuter</span>
+                </div>
+                <iframe id="preview" title="Aperçu du code"></iframe>
+            </div>
+        </section>
+    </div>
+</main>
+
+<script src="levels.js"></script>
+<script src="script.js"></script>
+
 </body>
 </html>
