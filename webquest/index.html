@@ -3,45 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebQuest - Apprendre le Frontend</title>
-    <link rel="icon" type="image/x-icon" href="favicon.ico?v=1">
-    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
-    <link rel="stylesheet" href="style.css">
+
+    <!-- ── SEO ─────────────────────────────────────── -->
+    <title>WebQuest – Apprendre le développement web frontend</title>
+    <meta name="description" content="WebQuest est une plateforme interactive pour apprendre le développement web frontend : HTML, CSS, JavaScript, les APIs et l'authentification JWT — directement dans le navigateur.">
+    <meta name="keywords" content="apprendre HTML, CSS, JavaScript, tutoriel web, développement frontend, fetch API, JWT, cours interactif">
+    <meta name="author" content="WebQuest">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://web-quests.onrender.com/">
+
+   <!-- ── PWA ──────────────────────────────────────────────── -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00ff88">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WebQuest">
+    
+    <!-- ── Open Graph (LinkedIn, Facebook, Discord…) ── -->
+    <meta property="og:type"        content="website">
+    <meta property="og:url"         content="https://web-quests.onrender.com/">
+    <meta property="og:title"       content="WebQuest – Apprendre le développement web frontend">
+    <meta property="og:description" content="Plateforme interactive pour apprendre HTML, CSS et JavaScript par la pratique, directement dans le navigateur.">
+    <meta property="og:image"       content="https://web-quests.onrender.com/images/og-image.webp">
+    <meta property="og:locale"      content="fr_FR">
+
+    <!-- ── Twitter Card ───────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="WebQuest – Apprendre le développement web">
+    <meta name="twitter:description" content="Apprends HTML, CSS et JavaScript par la pratique avec des exercices interactifs.">
+    <meta name="twitter:image"       content="https://web-quests.onrender.com/images/og-image.webp">
+
+    <!-- ── Structured Data (JSON-LD) ─────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "WebQuest",
+      "description": "Plateforme interactive d'apprentissage du développement web frontend",
+      "url": "https://web-quests.onrender.com",
+      "applicationCategory": "EducationalApplication",
+      "inLanguage": "fr",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      }
+    }
+    </script>
+
+    <!-- ── Favicons ────────────────────────────────── -->
+    <link rel="icon"       type="image/x-icon"  href="images/favicon.ico?v=2">
+    <link rel="shortcut icon"                   href="images/favicon.ico?v=2">
+    <link rel="apple-touch-icon"                href="images/logo.webp">
+
+    <!-- ── Fonts ─────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- ── Monaco Editor ─────────────────────────── -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.41.0/min/vs/loader.js"></script>
+
+    <!-- ── Styles ─────────────────────────────────── -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
 
-<!-- ── Écran de chargement ── -->
-<div id="loading-screen">
+<!-- ── Écran de chargement ───────────────────────── -->
+<div id="loading-screen" role="status" aria-label="Chargement de l'éditeur">
     <div class="loader-content">
-        <img src="/logo.webp" alt="WebQuest" class="loader-logo" />
-        <div class="loader-title">WebQuest</div>
-        <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
-        <div class="loader-hint">Chargement de l'éditeur…</div>
+        <img src="images/logo.webp" alt="Logo WebQuest" class="loader-logo" width="90" height="90">
+        <div class="loader-title" aria-hidden="true">WebQuest</div>
+        <div class="loader-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progression du chargement">
+            <div class="loader-bar-fill"></div>
+        </div>
+        <p class="loader-hint">Chargement de l'éditeur…</p>
     </div>
 </div>
 
-<!-- Modal API Logs -->
-<div id="api-logs-modal" class="api-modal hidden" role="dialog" aria-modal="true" aria-labelledby="api-modal-title">
+<!-- ── Modal API Logs ─────────────────────────────── -->
+<div id="api-logs-modal" class="api-modal hidden"
+     role="dialog" aria-modal="true" aria-labelledby="api-modal-title">
     <div class="api-modal-content">
         <div class="api-modal-header">
-            <h3 id="api-modal-title">🔌 Console API</h3>
-            <button onclick="closeApiLogs()" aria-label="Fermer la console">✖</button>
+            <h2 id="api-modal-title">🔌 Console API</h2>
+            <button onclick="closeApiLogs()" aria-label="Fermer la console API">✖</button>
         </div>
-        <pre id="api-logs-output">Chargement des logs...</pre>
+        <pre id="api-logs-output" aria-live="polite" aria-label="Logs de l'API">Chargement des logs…</pre>
     </div>
 </div>
 
-<!-- Header -->
+<!-- ── Header ─────────────────────────────────────── -->
 <header class="game-header">
     <div class="container">
-        <h1 class="site-title">
-            <img src="/logo.webp" alt="WebQuest logo" class="site-logo" />
-            WebQuest
-        </h1>
-        <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+       <a href="/" class="site-title" aria-label="WebQuest – retour à l'accueil">
+            <img src="images/logo.webp" alt="" class="site-logo" width="44" height="44" aria-hidden="true">
+            <span>WebQuest</span>
+        </a>
+       <div class="progress-bar"
+             role="progressbar"
+             aria-valuemin="0"
+             aria-valuemax="100"
+             aria-valuenow="0"
+             aria-label="Progression">
             <div class="progress-fill" id="progress-fill"></div>
             <span class="progress-text" id="progress-text">Niveau 0/12</span>
         </div>
@@ -53,7 +119,7 @@
 
 <main class="container">
     <!-- Navigation niveaux -->
-    <nav class="level-nav" id="level-nav" aria-label="Niveaux"></nav>
+    <nav class="level-nav" id="level-nav" aria-label="Navigation des niveaux"></nav>
 
     <!-- Zone principale -->
     <div class="workspace" id="workspace">
@@ -61,7 +127,7 @@
         <!-- Panneau Cours (collapsible) -->
         <aside class="lesson-panel" id="lesson-panel" aria-label="Cours">
             <div class="lesson-header">
-                <h2 id="lesson-title">Chargement...</h2>
+                <h1 id="lesson-title">Chargement...</h1>
             </div>
             <div class="lesson-body" id="lesson-body">
                 <div id="lesson-content"></div>
@@ -70,28 +136,30 @@
 
         <!-- Panneau Exercice -->
         <section class="exercise-panel" aria-label="Exercice">
-
-            <div id="exercise-description"></div>
+            <header class="exercise-header">
+                <h2 class="exercise-heading">Mission</h2>
+            </header>
+            <div id="exercise-description" aria-live="polite"></div>
 
             <!-- Éditeur -->
             <div class="code-editor-wrapper">
-                <div class="editor-tabs" role="tablist">
-                    <button class="tab active" data-file="html" role="tab" aria-selected="true">index.html</button>
-                    <button class="tab" data-file="css" role="tab" aria-selected="false">style.css</button>
-                    <button class="tab" data-file="js" role="tab" aria-selected="false">script.js</button>
+                <div class="editor-tabs" role="tablist" aria-label="Fichiers de l'éditeur">
+                    <button class="tab active" data-file="html" role="tab" aria-selected="true"  aria-controls="code-editor" id="tab-html">index.html</button>
+                    <button class="tab" data-file="css" role="tab" aria-selected="false" aria-controls="code-editor" id="tab-css">style.css</button>
+                    <button class="tab" data-file="js" role="tab" aria-selected="false" aria-controls="code-editor" id="tab-js">script.js</button>
                 </div>
-                <div id="code-editor"></div>
+                <div id="code-editor" role="textbox" aria-multiline="true" aria-label="Éditeur de code"></div>
             </div>
 
             <!-- Actions -->
             <div class="editor-actions">
                 <button onclick="runCode()" class="btn-primary">▶ Exécuter</button>
                 <button onclick="resetCode()" class="btn-secondary">⟳ Reset</button>
-                <button id="api-btn" onclick="openApiLogs()" class="btn-secondary" style="display:none">Console de l'API</button>
-                <button id="next-level-btn" onclick="goToNextLevel()" class="btn-success" disabled>Niveau suivant →</button>
+                <button id="api-btn" onclick="openApiLogs()" class="btn-secondary" style="display:none" aria-label="Ouvrir la console API">Console de l'API</button>
+                <button id="next-level-btn" onclick="goToNextLevel()" class="btn-success" disabled aria-disabled="true">Niveau suivant →</button>
             </div>
 
-            <div id="feedback" class="feedback" role="alert" aria-live="polite"></div>
+            <div id="feedback" class="feedback" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
             <!-- Aperçu -->
             <div class="preview-panel">
@@ -99,14 +167,14 @@
                     <h4>👁 Aperçu</h4>
                     <span class="preview-hint">Ctrl+s pour exécuter</span>
                 </div>
-                <iframe id="preview" title="Aperçu du code"></iframe>
+                <iframe id="preview" title="Aperçu du code" aria-label="Rendu visuel du code" loading="lazy"></iframe>
             </div>
         </section>
     </div>
 </main>
 
-<script src="levels.js"></script>
-<script src="script.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/script.js"></script>
 
 </body>
 </html>

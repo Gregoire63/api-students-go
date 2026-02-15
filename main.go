@@ -1,37 +1,92 @@
 package main
 
 import (
-	"github.com/fatih/color"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-	"os/exec"
-	"runtime"
 
+	"github.com/fatih/color"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Stockage des logs
-const MAX_LOGS = 200
+// ─── Configuration ────────────────────────────────────────
+// JWT_SECRET est lu depuis la variable d'environnement JWT_SECRET.
+// Si elle est absente (développement local), on utilise une valeur
+// par défaut en affichant un avertissement clair.
+func getJWTSecret() string {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Println("⚠️  ATTENTION : JWT_SECRET non défini. Utilisez une variable d'environnement en production !")
+		secret = "dev_secret_changez_moi_en_production"
+	}
+	return secret
+}
+
+// getAllowedOrigins retourne la liste des origines CORS autorisées.
+// En production, définir ALLOWED_ORIGINS="https://webquest.onrender.com"
+func getAllowedOrigins() []string {
+	env := os.Getenv("ALLOWED_ORIGINS")
+	if env != "" {
+		parts := strings.Split(env, ",")
+		origins := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				origins = append(origins, p)
+			}
+		}
+		return origins
+	}
+	// Origines autorisées en développement local
+	return []string{
+		"http://localhost:3000",
+		"http://localhost:5500",
+		"http://127.0.0.1:5500",
+		"http://localhost:8080",
+		"http://127.0.0.1:8080",
+		"http://localhost:8000",
+		"http://127.0.0.1:8000",
+	}
+}
+
+// getAppVersion retourne la version de l'application pour le cache-busting.
+// Priorité : variable d'env APP_VERSION > fichier build_version.txt > "dev"
+// Sur Render : définir APP_VERSION dans Environment (ex: "2025-02-14-001")
+// En local   : créer un fichier build_version.txt avec le numéro de version
+func getAppVersion() string {
+	if v := strings.TrimSpace(os.Getenv("APP_VERSION")); v != "" {
+		return v
+	}
+	data, err := os.ReadFile("build_version.txt")
+	if err == nil {
+		v := strings.TrimSpace(string(data))
+		if v != "" {
+			return v
+		}
+	}
+	return "dev"
+}
+
+const (
+	PORT     = ":3000"
+	MAX_LOGS = 200
+)
+
+// ─── Stockage des logs ────────────────────────────────────
 var (
 	logBuffer []string
 	logMu     sync.Mutex
 )
 
-// Configuration
-const (
-	JWT_SECRET = "votre_secret_super_securise_changez_moi"
-	PORT       = ":3000"
-)
-
-// Structures de données
+// ─── Structures ───────────────────────────────────────────
 type User struct {
 	ID       int    `json:"id"`
 	Email    string `json:"email"`
@@ -65,7 +120,6 @@ type Database struct {
 
 var db *Database
 
-// Claims JWT personnalisés
 type Claims struct {
 	UserID int    `json:"userId"`
 	Email  string `json:"email"`
@@ -73,7 +127,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// Initialisation
+// ─── Init ────────────────────────────────────────────────
 func init() {
 	db = &Database{
 		Users: []User{},
@@ -82,6 +136,7 @@ func init() {
 	loadDatabase()
 }
 
+// ─── Logging middleware ───────────────────────────────────
 type loggingResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -100,35 +155,25 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: 200}
-
-		var logs string
+		var logEntry string
 
 		if r.Method == "POST" || r.Method == "PUT" {
 			body, _ := io.ReadAll(r.Body)
 			r.Body = io.NopCloser(strings.NewReader(string(body)))
-
-			logs = fmt.Sprintf("[%s] %s\nBody: %s",
-				r.Method,
-				r.URL.Path,
-				string(body),
-			)
-
+			// Ne pas logger les mots de passe
+			logEntry = fmt.Sprintf("[%s] %s", r.Method, r.URL.Path)
 		} else {
-			logs = fmt.Sprintf("[%s] %s",
-				r.Method,
-				r.URL.Path,
-			)
+			logEntry = fmt.Sprintf("[%s] %s", r.Method, r.URL.Path)
 		}
 
-		addLog(logs)
-		fmt.Print(logs)
+		addLog(logEntry)
 
 		next(lrw, r)
 
 		var statusColor *color.Color
 		switch {
 		case lrw.statusCode >= 500:
-			statusColor = color.New(color.FgRed).Add(color.Bold)
+			statusColor = color.New(color.FgRed, color.Bold)
 		case lrw.statusCode >= 400:
 			statusColor = color.New(color.FgHiRed)
 		case lrw.statusCode >= 300:
@@ -138,176 +183,57 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		statusLog := fmt.Sprintf("Status %d", lrw.statusCode)
-
 		addLog(statusLog)
-		statusColor.Print(statusLog)
+		statusColor.Println(statusLog)
 	}
 }
 
-func authIfNeeded(next http.HandlerFunc, protectedMethods ...string) http.HandlerFunc {
+// ─── Security headers middleware ──────────────────────────
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Empêche le clickjacking
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
+		// Empêche le MIME sniffing
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Force HTTPS (HSTS) — activer seulement si le domaine est entièrement HTTPS
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		// Politique de référent
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		// Permissions
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// ─── CORS middleware ──────────────────────────────────────
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	allowedOrigins := getAllowedOrigins()
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Vérifie si la méthode doit être protégée
-		needsAuth := false
-		for _, m := range protectedMethods {
-			if r.Method == m {
-				needsAuth = true
+		origin := r.Header.Get("Origin")
+
+		allowed := false
+		for _, o := range allowedOrigins {
+			if origin == o {
+				allowed = true
 				break
 			}
 		}
 
-		if needsAuth {
-			// Si la méthode est protégée, applique l'authMiddleware
-			authMiddleware(next)(w, r)
-			return
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
 		}
+		// Si l'origine n'est pas dans la liste → pas d'en-tête CORS
+		// (le navigateur bloquera la requête, ce qui est le comportement voulu)
 
-		// Sinon, on passe directement au handler
-		next(w, r)
-	}
-}
-
-func openBrowser(url string) {
-	var err error
-
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin": // macOS
-		err = exec.Command("open", url).Start()
-	}
-
-	if err != nil {
-		log.Println("Impossible d'ouvrir le navigateur :", err)
-	}
-}
-
-func main() {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-    // Réponse HTML basique pour simuler un tableau de bord
-    w.Header().Set("Content-Type", "text/html")
-w.Write([]byte(`
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tableau de bord</title>
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            text-align: center; 
-            padding: 50px; 
-            background: #f0f8ff; 
-        }
-
-        h1 { 
-            color: #2c3e50; 
-        }
-
-        .success { 
-            color: green; 
-            font-weight: bold; 
-        }
-
-        button {
-            margin-top: 30px;
-            padding: 12px 25px;
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            background: linear-gradient(135deg, #3498db, #6c5ce7);
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-        }
-
-        button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
-        }
-
-        button:active {
-            transform: translateY(0);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        }
-    </style>
-</head>
-<body>
-    <h1>🎉 Connexion réussie !</h1>
-    <p class="success">Vous êtes maintenant sur le tableau de bord.</p>
-    <p>Dans un vrai projet, cette page afficherait vos données utilisateur.</p>
-    <button onclick="window.history.back()">← Retour à l'exercice</button>
-</body>
-</html>
-`))
-})
-
-    fs := http.FileServer(http.Dir("./webquest"))
-	mux.Handle("/", fs)
-	mux.HandleFunc("/api/register", loggingMiddleware(corsMiddleware(handleRegister)))
-	mux.HandleFunc("/api/login", loggingMiddleware(corsMiddleware(handleLogin)))
-	mux.HandleFunc("/api/logout", loggingMiddleware(corsMiddleware(handleLogout)))
-	mux.HandleFunc("/api/me", loggingMiddleware(corsMiddleware(authMiddleware(handleMe))))
-    mux.HandleFunc("/api/posts", loggingMiddleware(corsMiddleware(authIfNeeded(handlePosts, "POST"))))
-	mux.HandleFunc("/api/posts/", loggingMiddleware(corsMiddleware(authMiddleware(handlePostByID))))
-	mux.HandleFunc("/api/logs", corsMiddleware(handleLogs))
-	mux.HandleFunc("/api/", loggingMiddleware(corsMiddleware(handleRoot)))
-
-
-	go func() {
-		log.Fatal(http.ListenAndServe(":3000", mux))
-	}()
-    url := "http://localhost"+PORT
-	color.Green("API WebQuest démarrée sur %s\n", url)
-	fmt.Println("\nEndpoints :")
-	fmt.Println("  POST /register               - Créer un compte")
-	fmt.Println("  POST /login                  - Se connecter")
-	fmt.Println("  POST /logout                 - Se déconnecter")
-	fmt.Println("  GET /me                      - Profil utilisateur")
-	fmt.Println("  GET|POST /posts              - Liste des posts|Créer un post")
-	fmt.Println("  GET|PUT|DELETE /posts/:id    - Détail d'un post|Modifier un post|Supprimer un post")
-	fmt.Println("\nComptes test : admin@test.com / student@test.com  (password)")
-
-    openBrowser(url)
-
-	select {}
-}
-
-// Middleware CORS
-func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		
-		allowedOrigins := []string{
-            "http://localhost:3000",
-			"http://localhost:5500",
-            "http://127.0.0.1:5500",
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
-            "http://localhost:8000",
-            "http://127.0.0.1:8000",
-        }
-
-        for _, allowedOrigin := range allowedOrigins {
-            if origin == allowedOrigin {
-                w.Header().Set("Access-Control-Allow-Origin", origin)
-                break
-            }
-        }
-
-        if w.Header().Get("Access-Control-Allow-Origin") == "" {
-            w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5501")
-        }
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
@@ -315,11 +241,12 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Middleware d'authentification
+// ─── Auth middleware ──────────────────────────────────────
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var tokenString string
-		logExplain("Middleware auth : vérification de la présence d'un token")
+
+		logExplain("Auth : recherche du token")
 		cookie, err := r.Cookie("token")
 		if err == nil {
 			tokenString = cookie.Value
@@ -328,93 +255,285 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			authHeader := r.Header.Get("Authorization")
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
-				logExplain("Token trouvé dans l'en-tête Authorization")
+				logExplain("Token trouvé dans Authorization header")
 			}
 		}
 
 		if tokenString == "" {
-			logExplain("Aucun token trouvé, accès refusé")
-			respondJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "Token manquant",
-			})
+			logExplain("Aucun token → accès refusé")
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Token manquant"})
 			return
 		}
 
-		logExplain("Décodage du token JWT pour vérifier l'authentification")
 		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(JWT_SECRET), nil
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("méthode de signature inattendue: %v", t.Header["alg"])
+			}
+			return []byte(getJWTSecret()), nil
 		})
 
 		if err != nil || !token.Valid {
-			logExplain("Le token est invalide ou expiré, accès refusé")
-			respondJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "Token invalide",
-			})
+			logExplain("Token invalide ou expiré")
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Token invalide"})
 			return
 		}
-		logExplain("Token valide, extraction des informations utilisateur : ID=%d, Email=%s, Role=%s",
-			claims.UserID, claims.Email, claims.Role)
+
+		logExplain("Token valide — UserID=%d, Email=%s, Role=%s", claims.UserID, claims.Email, claims.Role)
 		r.Header.Set("X-User-ID", fmt.Sprintf("%d", claims.UserID))
 		r.Header.Set("X-User-Email", claims.Email)
 		r.Header.Set("X-User-Role", claims.Role)
-		logExplain("Passage au handler suivant avec les informations utilisateur ajoutées aux headers")
 
 		next(w, r)
 	}
 }
 
-func logExplain(format string, a ...interface{}) {
-	addLog("[EXPLAIN] " + fmt.Sprintf(format, a...))
+// authIfNeeded applique authMiddleware uniquement pour certaines méthodes HTTP
+func authIfNeeded(next http.HandlerFunc, protectedMethods ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for _, m := range protectedMethods {
+			if r.Method == m {
+				authMiddleware(next)(w, r)
+				return
+			}
+		}
+		next(w, r)
+	}
 }
 
-// Handlers
+// ─── Main ────────────────────────────────────────────────
+func main() {
+	appVersion := getAppVersion()
+	color.Cyan("📦 Version : %s\n", appVersion)
+
+	mux := http.NewServeMux()
+
+	// ── Fichiers statiques avec cache-busting ──────────────
+	// Structure du dossier webquest/ :
+	//   index.html, 404.html, manifest.json, robots.txt, sitemap.xml
+	//   css/style.css   js/script.js   js/levels.js   images/*
+	staticFS := http.FileServer(http.Dir("./webquest"))
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// ── Fichiers à la racine servis directement ────────
+		rootFiles := map[string]string{
+			"/robots.txt":   "text/plain; charset=utf-8",
+			"/sitemap.xml":  "application/xml; charset=utf-8",
+			"/manifest.json": "application/manifest+json; charset=utf-8",
+			"/favicon.ico":  "image/x-icon",
+		}
+		if ct, ok := rootFiles[path]; ok {
+			// Chercher dans webquest/ puis dans webquest/images/
+			candidates := []string{
+				filepath.Join("./webquest", filepath.Clean(path)),
+				filepath.Join("./webquest/images", filepath.Base(path)),
+			}
+			for _, candidate := range candidates {
+				if _, err := os.Stat(candidate); err == nil {
+					w.Header().Set("Content-Type", ct)
+					if path == "/robots.txt" || path == "/sitemap.xml" {
+						w.Header().Set("Cache-Control", "public, max-age=86400") // 1 jour
+					} else {
+						w.Header().Set("Cache-Control", "public, max-age=604800") // 1 semaine
+					}
+					http.ServeFile(w, r, candidate)
+					return
+				}
+			}
+		}
+
+		// ── Assets statiques (css/, js/, images/) ─────────
+		// Un "." dans le dernier segment = fichier asset
+		if path != "/" && strings.Contains(filepath.Base(path), ".") {
+			filePath := filepath.Join("./webquest", filepath.Clean(path))
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				handle404(w, r, appVersion)
+				return
+			}
+			// Cache long sur les assets versionnés (?v=...) → 1 an
+			// Cache court sur les autres assets → 1 heure
+			if r.URL.RawQuery != "" {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "public, max-age=3600")
+			}
+			staticFS.ServeHTTP(w, r)
+			return
+		}
+
+		// ── Route SPA → index.html injecté ────────────────
+		// ── Vérifie si le chemin existe réellement ────────
+		filePath := filepath.Join("./webquest", filepath.Clean(path))
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			handle404(w, r, appVersion)
+			return
+		}
+
+		// Sinon SPA
+		serveIndex(w, r, appVersion)
+	})
+
+	// ── Dashboard ─────────────────────────────────────────
+	mux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		handleDashboard(w, r, appVersion)
+	})
+
+	// ── API ───────────────────────────────────────────────
+	mux.HandleFunc("/api/register", loggingMiddleware(corsMiddleware(handleRegister)))
+	mux.HandleFunc("/api/login",    loggingMiddleware(corsMiddleware(handleLogin)))
+	mux.HandleFunc("/api/logout",   loggingMiddleware(corsMiddleware(handleLogout)))
+	mux.HandleFunc("/api/me",       loggingMiddleware(corsMiddleware(authMiddleware(handleMe))))
+	mux.HandleFunc("/api/posts",    loggingMiddleware(corsMiddleware(authIfNeeded(handlePosts, "POST"))))
+	mux.HandleFunc("/api/posts/",   loggingMiddleware(corsMiddleware(authMiddleware(handlePostByID))))
+	mux.HandleFunc("/api/logs",     corsMiddleware(handleLogs))
+	mux.HandleFunc("/api/",         loggingMiddleware(corsMiddleware(handleAPIRoot)))
+
+	// ── Security headers sur tout ─────────────────────────
+	handler := securityHeaders(mux)
+
+	addr := PORT
+	color.Green("🚀 WebQuest démarré sur http://localhost%s\n", addr)
+	fmt.Println("\nEndpoints disponibles :")
+	fmt.Println("  POST   /api/register        - Créer un compte")
+	fmt.Println("  POST   /api/login           - Se connecter")
+	fmt.Println("  POST   /api/logout          - Se déconnecter")
+	fmt.Println("  GET    /api/me              - Profil utilisateur (auth)")
+	fmt.Println("  GET    /api/posts           - Liste des posts")
+	fmt.Println("  POST   /api/posts           - Créer un post (auth)")
+	fmt.Println("  GET    /api/posts/:id       - Détail d'un post")
+	fmt.Println("  PUT    /api/posts/:id       - Modifier un post (auth)")
+	fmt.Println("  DELETE /api/posts/:id       - Supprimer un post (auth)")
+	fmt.Println("\nComptes test : admin@test.com / password | student@test.com / password")
+
+	log.Fatal(http.ListenAndServe(addr, handler))
+}
+
+// ─── Handlers ────────────────────────────────────────────
+
+// serveIndex lit index.html et injecte la version dans les URLs des assets.
+// Cela force le navigateur à recharger JS/CSS quand APP_VERSION change.
+func serveIndex(w http.ResponseWriter, r *http.Request, version string) {
+	content, err := os.ReadFile("./webquest/index.html")
+	if err != nil {
+		handle404(w, r, version)
+		return
+	}
+
+	html := string(content)
+
+	// Injecter ?v=VERSION dans les liens CSS et JS locaux pour le cache-busting.
+	// Couvre les deux structures : fichiers à plat ET sous-dossiers css/ js/
+	replacements := []struct{ from, to string }{
+		// CSS (racine et sous-dossier css/)
+		{`href="style.css"`,       fmt.Sprintf(`href="style.css?v=%s"`, version)},
+		{`href="./style.css"`,     fmt.Sprintf(`href="./style.css?v=%s"`, version)},
+		{`href="css/style.css"`,   fmt.Sprintf(`href="css/style.css?v=%s"`, version)},
+		{`href="./css/style.css"`, fmt.Sprintf(`href="./css/style.css?v=%s"`, version)},
+		// JS principal (racine et sous-dossier js/)
+		{`src="script.js"`,       fmt.Sprintf(`src="script.js?v=%s"`, version)},
+		{`src="./script.js"`,     fmt.Sprintf(`src="./script.js?v=%s"`, version)},
+		{`src="js/script.js"`,    fmt.Sprintf(`src="js/script.js?v=%s"`, version)},
+		{`src="./js/script.js"`,  fmt.Sprintf(`src="./js/script.js?v=%s"`, version)},
+		// Levels JS (racine et sous-dossier js/)
+		{`src="levels.js"`,       fmt.Sprintf(`src="levels.js?v=%s"`, version)},
+		{`src="./levels.js"`,     fmt.Sprintf(`src="./levels.js?v=%s"`, version)},
+		{`src="js/levels.js"`,    fmt.Sprintf(`src="js/levels.js?v=%s"`, version)},
+		{`src="./js/levels.js"`,  fmt.Sprintf(`src="./js/levels.js?v=%s"`, version)},
+	}
+	for _, rep := range replacements {
+		html = strings.ReplaceAll(html, rep.from, rep.to)
+	}
+
+	// Ajouter une balise meta version pour le debug côté client
+	html = strings.ReplaceAll(html,
+		`</head>`,
+		fmt.Sprintf(`    <meta name="app-version" content="%s">`+"\n</head>", version),
+	)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Ne pas cacher index.html — les assets JS/CSS sont cachés via ?v=
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	fmt.Fprint(w, html)
+}
+
+// handle404 sert une page d'erreur 404 stylisée.
+func handle404(w http.ResponseWriter, r *http.Request, version string) {
+	content, err := os.ReadFile("./webquest/404.html")
+	if err != nil {
+		// Fallback minimal si 404.html manque
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>404 – WebQuest</title></head><body><h1>404 – Page introuvable</h1><a href="/">Retour à l'accueil</a></body></html>`)
+		return
+	}
+	html := strings.ReplaceAll(string(content), `{{VERSION}}`, version)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, html)
+}
+
+func handleDashboard(w http.ResponseWriter, r *http.Request, version string) {
+	content, err := os.ReadFile("./webquest/dashboard.html")
+	if err != nil {
+		handle404(w, r, version)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, string(content))
+}
+
 
 func handleLogs(w http.ResponseWriter, r *http.Request) {
 	logMu.Lock()
 	defer logMu.Unlock()
-
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"logs": logBuffer,
-	})
+	respondJSON(w, http.StatusOK, map[string]interface{}{"logs": logBuffer})
 }
 
-func handleRoot(w http.ResponseWriter, r *http.Request) {
+func handleAPIRoot(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{
-		"message": "API WebQuest - Apprendre le Frontend",
+		"message": "API WebQuest",
 		"version": "1.0.0",
 	})
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
-	logExplain("Nouvelle requête : /register, méthode %s", r.Method)
 	if r.Method != "POST" {
-		logExplain("La méthode n'est pas POST, impossible de créer un compte")
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 		return
 	}
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logExplain("Impossible de lire les données envoyées")
+		logExplain("Impossible de décoder le body")
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Données invalides"})
 		return
 	}
+
+	req.Email    = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
+
 	if req.Email == "" || req.Password == "" {
-		logExplain("Les informations sont incomplètes : email ou mot de passe manquant")
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Email et mot de passe requis"})
 		return
 	}
-
+	if len(req.Password) < 6 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Mot de passe trop court (min 6 caractères)"})
+		return
+	}
 	if req.Role == "" {
 		req.Role = "student"
-		logExplain("Aucun rôle fourni, rôle par défaut 'student' assigné")
+	}
+	// Empêcher la création de comptes admin via l'API publique
+	if req.Role == "admin" {
+		req.Role = "student"
 	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	logExplain("On vérifie si l'email n'existe pas déjà en base")
 	for _, user := range db.Users {
 		if user.Email == req.Email {
 			respondJSON(w, http.StatusConflict, map[string]string{"error": "Email déjà utilisé"})
@@ -422,40 +541,39 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	logExplain("Création d'un nouveau compte pour %s", req.Email)
 	newUser := User{
 		ID:       len(db.Users) + 1,
 		Email:    req.Email,
 		Password: hashPassword(req.Password),
 		Role:     req.Role,
 	}
-	logExplain("Mot de passe hashé avant d'être stockage en base de donnée")
 	db.Users = append(db.Users, newUser)
 	saveDatabase()
-	logExplain("Compte créé avec succès, stocké dans la base de données")
+
 	newUser.Password = ""
+	logExplain("Compte créé avec succès (ID=%d)", newUser.ID)
 	respondJSON(w, http.StatusCreated, newUser)
-	logExplain("Réponse de réussite envoyée au client")
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
-	logExplain("Nouvelle requête : /login, méthode %s", r.Method)
 	if r.Method != "POST" {
-		logExplain("La méthode n'est pas POST, impossible de se connecter")
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 		return
 	}
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logExplain("Impossible de lire les données envoyées")
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Données invalides"})
 		return
 	}
 
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	logExplain("On vérifie sur l'email existe dans la base de donnée")
+	logExplain("Tentative de connexion pour %s", req.Email)
 	var foundUser *User
 	for i := range db.Users {
 		if db.Users[i].Email == req.Email {
@@ -465,24 +583,19 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if foundUser == nil {
-		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Aucun compte avec cet email"})
-		return
-	}
-    
-	err := bcrypt.CompareHashAndPassword(
-		[]byte(foundUser.Password),
-		[]byte(req.Password),
-	)
-	logExplain("Le mot de passe est comparé à celui qui est hashé en base de données")
-	if err != nil {
-		fmt.Println("bcrypt FAIL :", err)
-		respondJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "Mot de passe incorrect",
-		})
+		// Délai constant pour éviter les timing attacks (énumération d'emails)
+		time.Sleep(200 * time.Millisecond)
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Email ou mot de passe incorrect"})
 		return
 	}
 
-	logExplain("Génération d'un token d'identification")
+	err := bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(req.Password))
+	logExplain("Comparaison du hash bcrypt")
+	if err != nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Email ou mot de passe incorrect"})
+		return
+	}
+
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		UserID: foundUser.ID,
@@ -490,13 +603,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		Role:   foundUser.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
-	logExplain("Token JWT créé avec une durée de vie limité et envoyé dans un cookie sécurisé")
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(JWT_SECRET))
+	tokenString, err := token.SignedString([]byte(getJWTSecret()))
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Erreur serveur"})
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Erreur interne"})
 		return
 	}
 
@@ -504,94 +618,86 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		Name:     "token",
 		Value:    tokenString,
 		Expires:  expirationTime,
-		HttpOnly: true,
+		HttpOnly: true,  // Inaccessible depuis JavaScript → protection XSS
 		Path:     "/",
-		Secure: true,
+		Secure:   true,  // HTTPS uniquement en production
 		SameSite: http.SameSiteNoneMode,
 	})
 
-    userCopy := *foundUser
-    userCopy.Password = ""
-
-    respondJSON(w, http.StatusOK, map[string]interface{}{
-        "token": tokenString,
-        "user":  userCopy,
-    })
-	logExplain("Connexion réussie, réponse envoyée au client")
+	userCopy          := *foundUser
+	userCopy.Password  = ""
+	logExplain("Connexion réussie pour %s", req.Email)
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"token": tokenString,
+		"user":  userCopy,
+	})
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
-	logExplain("Nouvelle requête : /logout, méthode %s", r.Method)
 	if r.Method != "POST" {
-		logExplain("La méthode n'est pas POST, impossible de se déconnecter")
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 		return
 	}
 
-	logExplain("Suppression du cookie d'authentification pour déconnexion")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour),
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 		HttpOnly: true,
 		Path:     "/",
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
+	logExplain("Déconnexion réussie")
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Déconnexion réussie"})
-	logExplain("Déconnexion réussie, réponse envoyée au client")
 }
 
 func handleMe(w http.ResponseWriter, r *http.Request) {
-	logExplain("Nouvelle requête : /me, méthode %s", r.Method)
 	if r.Method != "GET" {
-		logExplain("La méthode n'est pas GET, impossible de récupérer le profil")
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 		return
 	}
 
 	email := r.Header.Get("X-User-Email")
-	logExplain("Recherche de l'utilisateur avec email : %s", email)
-
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
 	for _, user := range db.Users {
 		if user.Email == email {
-			logExplain("Utilisateur trouvé, envoi du profil sans le mot de passe")
 			user.Password = ""
 			respondJSON(w, http.StatusOK, user)
 			return
 		}
 	}
-	logExplain("Utilisateur non trouvé")
 	respondJSON(w, http.StatusNotFound, map[string]string{"error": "Utilisateur non trouvé"})
 }
 
 func handlePosts(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("X-User-ID")
-	logExplain("Nouvelle requête : /posts, méthode %s, utilisateur ID=%s", r.Method, userID)
 	switch r.Method {
 	case "GET":
-		logExplain("Récupération de tous les posts depuis la base")
 		db.mu.RLock()
 		defer db.mu.RUnlock()
 		respondJSON(w, http.StatusOK, db.Posts)
 
 	case "POST":
-		logExplain("Création d'un nouveau post")
-		// 🔐 PROTÉGÉ : auth requise
 		userIDHeader := r.Header.Get("X-User-ID")
 		if userIDHeader == "" {
-			respondJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "Authentification requise",
-			})
+			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Authentification requise"})
 			return
 		}
 
 		var post Post
 		if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
-			logExplain("Impossible de lire les données du post")
 			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Données invalides"})
+			return
+		}
+
+		post.Title   = strings.TrimSpace(post.Title)
+		post.Content = strings.TrimSpace(post.Content)
+		if post.Title == "" || post.Content == "" {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Titre et contenu requis"})
 			return
 		}
 
@@ -602,19 +708,17 @@ func handlePosts(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(userIDHeader, "%d", &post.UserID)
 		db.Posts = append(db.Posts, post)
 		saveDatabase()
-		logExplain("Post ajouté à la base avec ID=%d", post.ID)
+		logExplain("Post créé (ID=%d) par UserID=%s", post.ID, userIDHeader)
 		respondJSON(w, http.StatusCreated, post)
 
 	default:
-		logExplain("Méthode non autorisée sur /posts")
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 	}
 }
 
 func handlePostByID(w http.ResponseWriter, r *http.Request) {
 	id := 0
-	fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/posts/"), "%d", &id)
-
+	fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/api/posts/"), "%d", &id)
 	if id == 0 {
 		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "ID invalide"})
 		return
@@ -622,24 +726,21 @@ func handlePostByID(w http.ResponseWriter, r *http.Request) {
 
 	userID := 0
 	fmt.Sscanf(r.Header.Get("X-User-ID"), "%d", &userID)
-	logExplain("Nouvelle requête : /posts/%d, méthode %s, utilisateur ID=%d", id, r.Method, userID)
+	userRole := r.Header.Get("X-User-Role")
+
 	switch r.Method {
 	case "GET":
-		logExplain("Recherche du post avec ID=%d", id)
 		db.mu.RLock()
 		defer db.mu.RUnlock()
-
 		for _, post := range db.Posts {
 			if post.ID == id {
 				respondJSON(w, http.StatusOK, post)
 				return
 			}
 		}
-		logExplain("Post non trouvé")
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Post non trouvé"})
 
 	case "PUT":
-		logExplain("Modification du post avec ID=%d", id)
 		var updatedPost Post
 		if err := json.NewDecoder(r.Body).Decode(&updatedPost); err != nil {
 			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Données invalides"})
@@ -648,78 +749,65 @@ func handlePostByID(w http.ResponseWriter, r *http.Request) {
 
 		db.mu.Lock()
 		defer db.mu.Unlock()
-
 		for i, post := range db.Posts {
 			if post.ID == id {
-				if post.UserID != userID {
-					logExplain("L'utilisateur n'est pas autorisé à modifier ce post")
+				if post.UserID != userID && userRole != "admin" {
 					respondJSON(w, http.StatusForbidden, map[string]string{"error": "Accès refusé"})
 					return
 				}
-				db.Posts[i].Title = updatedPost.Title
-				db.Posts[i].Content = updatedPost.Content
+				db.Posts[i].Title   = strings.TrimSpace(updatedPost.Title)
+				db.Posts[i].Content = strings.TrimSpace(updatedPost.Content)
 				saveDatabase()
-				logExplain("Post mis à jour")
 				respondJSON(w, http.StatusOK, db.Posts[i])
 				return
 			}
 		}
-		logExplain("Post non trouvé")
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Post non trouvé"})
 
 	case "DELETE":
-		logExplain("Suppression du post avec ID=%d", id)
 		db.mu.Lock()
 		defer db.mu.Unlock()
-
 		for i, post := range db.Posts {
 			if post.ID == id {
-				if post.UserID != userID {
-					logExplain("L'utilisateur n'est pas autorisé à supprimer ce post")
+				if post.UserID != userID && userRole != "admin" {
 					respondJSON(w, http.StatusForbidden, map[string]string{"error": "Accès refusé"})
 					return
 				}
 				db.Posts = append(db.Posts[:i], db.Posts[i+1:]...)
 				saveDatabase()
-				logExplain("Post supprimé")
 				respondJSON(w, http.StatusOK, map[string]string{"message": "Post supprimé"})
 				return
 			}
 		}
-		logExplain("Post non trouvé")
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Post non trouvé"})
 
 	default:
-		logExplain("Méthode non autorisée sur /posts/%d", id)
 		respondJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "Méthode non autorisée"})
 	}
 }
 
-// Utilitaires
+// ─── Utilitaires ─────────────────────────────────────────
+
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("respondJSON error: %v", err)
+	}
+}
+
+func logExplain(format string, a ...interface{}) {
+	addLog("[EXPLAIN] " + fmt.Sprintf(format, a...))
 }
 
 func loadDatabase() {
 	file, err := os.Open("db.json")
 	if err != nil {
-		adminHash := hashPassword("password")
-		studentHash := hashPassword("password")
+		log.Println("db.json introuvable, création avec les données par défaut")
 		db.Users = []User{
-			{
-				ID:       1,
-				Email:    "admin@test.com",
-				Password: adminHash,
-				Role:     "admin",
-			},
-			{
-				ID:       2,
-				Email:    "student@test.com",
-				Password: studentHash,
-				Role:     "student",
-			},
+			{ID: 1, Email: "admin@test.com",   Password: hashPassword("password"), Role: "admin"},
+			{ID: 2, Email: "student@test.com", Password: hashPassword("password"), Role: "student"},
 		}
 		db.Posts = []Post{
 			{ID: 1, Title: "Premier post", Content: "Contenu du premier post", UserID: 1},
@@ -729,21 +817,33 @@ func loadDatabase() {
 	}
 	defer file.Close()
 
-	data, _ := io.ReadAll(file)
-	json.Unmarshal(data, db)
+	data, err := io.ReadAll(file)
+	if err != nil {
+		log.Fatal("Erreur lecture db.json :", err)
+	}
+	if err := json.Unmarshal(data, db); err != nil {
+		log.Fatal("Erreur parsing db.json :", err)
+	}
+	log.Printf("Base de données chargée : %d utilisateurs, %d posts", len(db.Users), len(db.Posts))
 }
 
 func saveDatabase() {
-	data, _ := json.MarshalIndent(db, "", "  ")
-	os.WriteFile("db.json", data, 0644)
+	data, err := json.MarshalIndent(db, "", "  ")
+	if err != nil {
+		log.Println("Erreur sérialisation db :", err)
+		return
+	}
+	if err := os.WriteFile("db.json", data, 0600); err != nil {
+		log.Println("Erreur écriture db.json :", err)
+	}
 }
 
 func hashPassword(password string) string {
-    hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-    if err != nil {
-        log.Fatal("Impossible de hasher le mot de passe :", err)
-    }
-    return string(hashed)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal("Impossible de hasher le mot de passe :", err)
+	}
+	return string(hashed)
 }
 
 func addLog(message string) {
@@ -751,13 +851,10 @@ func addLog(message string) {
 	defer logMu.Unlock()
 
 	timestamp := time.Now().Format("15:04:05")
-	entry := fmt.Sprintf("[%s] %s", timestamp, message)
-
-	fmt.Println(entry) // console Render
+	entry     := fmt.Sprintf("[%s] %s", timestamp, message)
+	fmt.Println(entry)
 
 	logBuffer = append(logBuffer, entry)
-
-	// Garder seulement les MAX_LOGS dernières lignes
 	if len(logBuffer) > MAX_LOGS {
 		logBuffer = logBuffer[len(logBuffer)-MAX_LOGS:]
 	}

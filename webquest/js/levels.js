@@ -143,7 +143,7 @@ console.log("Hello");
     <main>
         <section>
             <article class="card">
-                <img src="logo.webp" alt="Logo" class="card-icon">
+                <img src="images/logo.webp" alt="Logo" class="card-icon">
                 <h2 class="card-title">Cours de Web moderne</h2>
                     <p class="card-description">
                         Découvrez les fondamentaux du développement web moderne avec HTML5, CSS3 et JavaScript.
@@ -207,6 +207,7 @@ section {
 `,
                 js: `// Ajoutez un console.log pour vérifier que JS fonctionne
 console.log("Hello World!");
+
 `
             },
             validation: (doc) => {
@@ -339,7 +340,7 @@ console.log("Hello World!");
     - Un sous-titre h2<br/>
     - Un paragraphes avec une description<br/>
     - Du texte en gras avec <strong><br/>
-    - Une image de votre choix (utilisez <img> avec un attribut alt)`,
+    - Une image de votre choix avec un attribut alt (utilisez le logo « images/logo.webp » ou une image sur internet )`,
             starterCode: {
                 html: `<!DOCTYPE html>
 <html lang="fr">
@@ -442,7 +443,7 @@ button:active { transform: scale(0.95); }</code></pre>
             </ul>
 
             <h3>Le Box Model</h3>
-            <img src="box-model.webp" style="width: 80%; border-radius:3px; min-width: 150px; max-width: 300px;">
+            <img src="images/box-model.webp" alt="Box model" style="width: 80%; border-radius:3px; min-width: 150px; max-width: 300px;">
 
             <h3>Couleurs en CSS</h3>
             <pre><code>/* Nom de couleur */
@@ -506,7 +507,33 @@ color: rgba(255, 87, 51, 0.5);</code></pre>
                 const p = doc.querySelector('p');
                 
                 if (!h1 || !p) return { success: false, message: "❌ Éléments HTML manquants" };
-                
+
+                const styleSheets = Array.from(doc.styleSheets);
+                let hasDuplicateSelectors = false;
+                let duplicateSelector = null;
+
+                styleSheets.forEach(sheet => {
+                    try {
+                        const rules = sheet.cssRules || [];
+                        const selectorCount = {}
+                        Array.from(rules).forEach(rule => {
+                            const selectorText = rule.selectorText;
+                            if (!selectorText) return;
+                            if(selectorCount[selectorText]) {
+                                hasDuplicateSelectors = true
+                                duplicateSelector=selectorText
+                            } else selectorCount[selectorText]= 1
+                        });
+                    } catch (e) {
+                        console.warn("Impossible de lire une feuille de style", e);
+                    }
+                });
+                if (hasDuplicateSelectors) {
+                    return {
+                        success: false,
+                        message: `❌ Vous avez défini plusieurs fois le style pour la balise ${duplicateSelector}. Utilisez un seul sélecteur !`
+                    };
+                }
                 const h1Style = window.getComputedStyle(h1);
                 const pStyle = window.getComputedStyle(p);
                 
@@ -532,7 +559,7 @@ color: rgba(255, 87, 51, 0.5);</code></pre>
         lesson: `
             <h3>Créer des liens</h3>
             <p>La balise <code>&lt;a&gt;</code> (anchor = ancre) permet de créer des liens hypertextes :</p>
-            <pre><code>&lt;a href="https://google.com"&gt;Aller sur Google&lt;/a&gt;
+            <pre><code>&lt;a href="https://google.com" target="_blank"&gt;Aller sur Google&lt;/a&gt;
 &lt;a href="#section"&gt;Ancre locale (scroll vers #section)&lt;/a&gt;
 &lt;a href="page2.html"&gt;Page 2 du site&lt;/a&gt;
 &lt;a href="mailto:contact@site.com"&gt;Envoyer un email&lt;/a&gt;
@@ -847,6 +874,7 @@ label {
     },
     {
         id: 6,
+        activeCode: 'js',
         shortTitle: "JavaScript Bases",
         title: "⚡ JavaScript - Introduction",
         xp: 200,
@@ -1025,6 +1053,7 @@ while (i < 5) {
 // 2. Créez la fonction afficherInfo()
 
 // 3. Appelez la fonction
+
 `
             },
             validation: (doc) => {
@@ -1048,6 +1077,7 @@ while (i < 5) {
         id: 7,
         shortTitle: "JavaScript ES6+",
         title: "JavaScript avancé (ES6+)",
+        activeCode: 'js',
         xp: 300,
         lesson: `
             <h3>JavaScript moderne (ES6+)</h3>
@@ -1259,7 +1289,7 @@ console.log(fruits.includes("pomme")); // true</code></pre>
     <h1>Ouvrez la console (${keyComboElement})</h1>
     <p>Sinon tu peux faire clique droit « <code>Inpecter l'élément</code> »</p>
     <br/>
-    <p>Résultat attendu : "La somme des nombres pairs doublés est : 60"</p>
+    <p>Résultat attendu : "La somme des nombres pairs doublés est : xx"</p>
     
     <script src="script.js"></script>
 </body>
@@ -1272,7 +1302,9 @@ const nombres = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 // 2. Utilisez map, filter et reduce (chaînez-les !)
 
-// 3. Affichez avec un template literal`
+// 3. Affichez avec un template literal
+
+`
             },
             validation: (doc) => {
                 const script = doc.querySelector('body script');
@@ -1298,6 +1330,7 @@ const nombres = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     {
         id: 8,
         shortTitle: "DOM",
+        activeCode: 'js',
         title: "🖱️ Le DOM - Manipulation",
         xp: 250,
         lesson: `
@@ -1507,7 +1540,9 @@ function changerStyle() {
     // Modifiez sa couleur (style.color)
     // Modifiez sa taille (style.fontSize)
     // Ajoutez la classe 'highlight' (classList.add)
-}`
+}
+    
+`
             },
             validation: (doc) => {
                 const texte = doc.getElementById('texte');
@@ -1575,6 +1610,7 @@ function changerStyle() {
         id: 9,
         shortTitle: "Événements",
         title: "Les Événements",
+        activeCode: 'js',
         xp: 250,
         lesson: `
             <h3>Qu'est-ce qu'un événement ?</h3>
@@ -1753,12 +1789,12 @@ window.addEventListener('beforeunload', (e) => {
         `,
         exercise: {
             description: `
-                Créez une interface de changement de thème :<br/>
+                Ajouter des évènements de changement de thème :<br/>
                  - 3 boutons : Rouge, Vert, Bleu<br/>
                  - Quand on clique sur un bouton, le fond du <code>body</code> prend la couleur du bouton<br/>
                  - Utilisez <code>addEventListener</code> sur chaque bouton<br/>
                  - Utilisez <code>document.body.style.backgroundColor</code><br/>
-                 - Bonus : Ajoutez un effet de transition CSS
+                 - Bonus : Ajoutez un effet de transition CSS (trouver comment utiliser la propriété css <a href="https://developer.mozilla.org/fr/docs/Web/CSS/Reference/Properties/transition" target="_blank">transition</a>)
             `,
             starterCode: {
                 html: `<!DOCTYPE html>
@@ -1802,7 +1838,9 @@ button:hover {
                 js: `// Sélectionnez les 3 boutons
         
 // Ajoutez un addEventListener sur chaque bouton
-// Qui change le backgroundColor du body`
+// Qui change le backgroundColor du body
+
+`
             },
             validation: (doc) => {
                 const buttons = doc.querySelectorAll('button');
@@ -1827,6 +1865,7 @@ button:hover {
     id: 10,
     shortTitle: "API",
     title: "Comprendre ce qu'est une API",
+    activeCode: 'js',
     xp: 120,
     lesson: `
         <h3>Qu'est-ce qu'une API ?</h3>
@@ -1915,6 +1954,7 @@ fetch("https://api.monsite.com/users")
     `,
     exercise: {
         description: `
+            Vous n'avez rien à faire ! <br/>
             Cette page simule l'utilisation d'une API :<br/>
                 1. Un bouton déclenche un évènement<br/>
                 2. Une fonction dans le script JavaScript se déclenche et fait appel à une api<br/>
@@ -2290,32 +2330,37 @@ transform: translate(-50%,-50%);
             js: `const btn = document.getElementById("btn");
 
 btn.addEventListener("click", () => {
+    // Affichage d'une animation de chargement
     const loader = document.getElementsByClassName("loader")[0]
     if(loader) loader.style.display = "unset"
-    // Méthode JavaScript pour lancer du code au bout d'un certain temps
-    // Temps exprimé en miliseconde, donc ici 5000 revient à 5 secondes
+
+    // Simulation d'une requête api qui prend du temps
+    // Temps exprimé en miliseconde, donc ici 5000 revient à 5 secondes d'attente
     setTimeout(()=>{
+        // Une fois les 5 secondes passé, on peut arreter l'animation
         if(loader) loader.style.display = "none"
         console.log("Requête API");
     }, 5000)
-    
-});`
-        },
-        validation: (doc) => {
-            const button = doc.querySelector('button');
-            const script = doc.querySelector('body script');
+});
 
-            if (!button) return { success: false, message: "❌ Il manque un bouton" };
-            if (!script) return { success: false, message: "❌ Le fichier JavaScript externe n'est pas lié" };
+`
+            },
+            validation: (doc) => {
+                const button = doc.querySelector('button');
+                const script = doc.querySelector('body script');
 
-            return { success: true, message: "Vous avez simulé un appel API !" };
+                if (!button) return { success: false, message: "❌ Il manque un bouton" };
+                if (!script) return { success: false, message: "❌ Le fichier JavaScript externe n'est pas lié" };
+
+                return { success: true, message: "Vous avez simulé un appel API !" };
+            }
         }
-    }
-},
+    },
     {
         id: 11,
         shortTitle: "Fetch API",
         title: "Fetch API - Requêtes",
+        activeCode: 'js',
         xp: 300,
         lesson: `
             <h3>Qu'est-ce que Fetch ?</h3>
@@ -2325,7 +2370,7 @@ btn.addEventListener("click", () => {
             </p>
 
             <h3>Communication Client-Serveur</h3>
-            <img style="width: 80%; border-radius: 5px;" src="/communication-CS.webp"/>
+            <img style="width: 80%; border-radius:3px; min-width: 150px; max-width: 300px;" src="images/communication-CS.webp" alt="Communication client serveur"/>
 
             <h3> Requête GET simple</h3>
             <p>Récupérer des données depuis une API :</p>
@@ -2498,7 +2543,7 @@ posts.forEach(post => {
         `,
         exercise: {
             description: `
-                Créez une interface de chargement de posts :<br/>
+                Créez le script pour charger et afficher les posts :<br/>
                  - Remplir une liste &lt;ul&gt; pour afficher les posts<br/>
                  - Au clic, faites un <code>fetch GET</code> vers <code>/posts</code><br/>
                  - Affichez chaque post dans un &lt;li&gt; avec son titre et contenu<br/>
@@ -2572,7 +2617,9 @@ const liste = document.getElementById('posts-list');
 //    - Récupérez les données avec .json()
 //    - Parcourez les posts avec forEach
 //    - Créez un <li> pour chaque post
-//    - Ajoutez le <li> dans la liste`
+//    - Ajoutez le <li> dans la liste
+
+`
             },
             validation: (doc) => {
                 const button = doc.getElementById('charger');
@@ -2603,6 +2650,7 @@ const liste = document.getElementById('posts-list');
         id: 12,
         shortTitle: "Authentification",
         title: "Authentification JWT",
+        activeCode: 'js',
         xp: 350,
         lesson: `
             <h3>Qu'est-ce que l'authentification ?</h3>
@@ -2643,18 +2691,7 @@ Header    Payload              Signature
 </code></pre>
 
             <h3> Flow d'authentification</h3>
-            <pre><code>1. Utilisateur → POST /login (email + password)
-                ↓
-2. Serveur vérifie les credentials
-                ↓
-3. Serveur crée un JWT et le renvoie (ou le met dans un cookie)
-                ↓
-4. Client stocke le JWT (localStorage ou cookie)
-                ↓
-5. Chaque requête inclut le JWT dans les headers ou cookies
-                ↓
-6. Serveur vérifie le JWT à chaque requête
-</code></pre>
+            <img src="images/authentication-flow.webp" alt="Flow d'identification" style="width: 80%; border-radius:3px; min-width: 180px; max-width: 300px;"/>
 
             <h3> Exemple complet de login</h3>
             <pre><code>async function login(email, password) {
@@ -2805,9 +2842,7 @@ Student: student@test.com / password</code></pre>
         `,
         exercise: {
             description: `
-                Créez un formulaire de connexion complet :<br/>
-                 - Formulaire avec email et password (inputs obligatoires)<br/>
-                 - Bouton submit<br/>
+                Créez le script permettant de gérer une connexion :<br/>
                  - Au submit : empêcher le rechargement (<code>e.preventDefault()</code>)<br/>
                  - Récupérer les valeurs des inputs<br/>
                  - Envoyer à <code>POST /login</code> avec <code>credentials: 'include'</code><br/>
@@ -2954,7 +2989,9 @@ async function login(email, password) {
         messageDiv.textContent = 'Erreur de connexion';
         messageDiv.className = 'error';
     }
-}`
+}
+    
+`
             },
             validation: (doc) => {
                 const form = doc.getElementById('login-form');
@@ -3002,6 +3039,7 @@ async function login(email, password) {
         id: 13,
         shortTitle: "Créer des données",
         title: "Créer un Post (CRUD)",
+        activeCode: 'js',
         xp: 300,
         lesson: `
             <h3>CRUD - Create, Read, Update, Delete</h3>
@@ -3250,8 +3288,6 @@ async function handleSubmit(e) {
         exercise: {
             description: `
                 Créez un formulaire de création de post complet :<br/>
-                 - Formulaire avec titre (input) et contenu (textarea)<br/>
-                 - Bouton submit<br/>
                  - Au submit : récupérer les valeurs<br/>
                  - Envoyer à <code>POST /posts</code> avec <code>credentials: 'include'</code><br/>
                  - Afficher le résultat dans un div #result<br/>
@@ -3384,7 +3420,9 @@ async function createPost(title, content) {
     } catch (error) {
         // Afficher l'erreur
     }
-}`
+}
+    
+`
             },
             validation: (doc) => {
                 const form = doc.getElementById('post-form');
@@ -3465,6 +3503,7 @@ async function createPost(title, content) {
         id: 14,
         shortTitle: "Local Storage",
         title: "LocalStorage & SessionStorage",
+        activeCode: "js",
         xp: 250,
         lesson: `
             <h3>Web Storage API</h3>
@@ -3694,9 +3733,6 @@ function charger(key) {
         exercise: {
             description: `
                 Créez un compteur de clics persistant :<br/>
-                 - Afficher "Clics : <span id="counter">0</span>"<br/>
-                 - Bouton "+1" pour incrémenter<br/>
-                 - Bouton "Reset" pour remettre à 0<br/>
                  - Au chargement de la page, récupérer le compteur depuis localStorage<br/>
                  - À chaque clic, sauvegarder dans localStorage<br/>
                  - Le compteur doit persister après rechargement de la page<br/>
@@ -3817,7 +3853,9 @@ resetBtn.addEventListener('click', () => {
 });
 
 // 7. Afficher la valeur initiale
-afficher();`
+afficher();
+
+`
             },
             validation: (doc) => {
                 const counter = doc.getElementById('counter');
@@ -4057,16 +4095,16 @@ function showLogin() {
 
             <h3>Checklist finale</h3>
             <ul>
-                <li>☐ Connexion/Déconnexion fonctionnelle</li>
-                <li>☐ Affichage du profil utilisateur</li>
-                <li>☐ Liste des posts affichée</li>
-                <li>☐ Création de posts</li>
-                <li>☐ CSS personnalisé et moderne</li>
-                <li>☐ Gestion des erreurs (messages clairs)</li>
-                <li>☐ Code propre et indenté</li>
-                <li>☐ Pas d'erreurs dans la console</li>
-                <li>☐ Utilise <code>credentials: 'include'</code></li>
-                <li>☐ Utilise <code>async/await</code> et <code>try/catch</code></li>
+                <li>Connexion/Déconnexion fonctionnelle</li>
+                <li>Affichage du profil utilisateur</li>
+                <li>Liste des posts affichée</li>
+                <li>Création de posts</li>
+                <li>CSS personnalisé et moderne</li>
+                <li>Gestion des erreurs (messages clairs)</li>
+                <li>Code propre et indenté</li>
+                <li>Pas d'erreurs dans la console</li>
+                <li>Utilise <code>credentials: 'include'</code></li>
+                <li>Utilise <code>async/await</code> et <code>try/catch</code></li>
             </ul>
 
             <h3>Prêt ? Lancez-vous !</h3>
@@ -4164,7 +4202,9 @@ body {
 // - credentials: 'include'
 // - async/await
 // - try/catch
-// - Gestion des erreurs`,
+// - Gestion des erreurs
+
+`,
             },
             validation: (doc) => {
                 const script = doc.querySelector('body script');

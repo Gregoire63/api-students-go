@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Tableau de bord · WebQuest</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg:     #0a0e27;
+            --accent: #00ff88;
+            --glow:   rgba(0,255,136,0.25);
+            --dim:    #8899aa;
+            --text:   #e0e8f0;
+        }
+
+        *, *::before, *::after { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+            padding: 40px 20px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        /* Grille animée */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            max-width: 600px;
+        }
+
+        .title {
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(18px, 4vw, 28px);
+            color: var(--accent);
+            text-shadow: 0 0 20px var(--glow);
+            margin-bottom: 20px;
+        }
+
+        .success {
+            color: var(--accent);
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .terminal {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(0,255,136,0.2);
+            border-radius: 8px;
+            padding: 20px 28px;
+            font-size: 14px;
+            color: var(--dim);
+            text-align: left;
+            margin-top: 20px;
+        }
+
+        .terminal .prompt { color: var(--accent); }
+        .terminal .info   { color: #ffaa00; }
+
+        .btn {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 14px 32px;
+            background: var(--accent);
+            color: var(--bg);
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            border-radius: 6px;
+            box-shadow: 0 0 20px var(--glow);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 35px var(--glow);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 0 15px var(--glow);
+        }
+
+        .version {
+            font-size: 11px;
+            color: rgba(136,153,170,0.4);
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="content">
+        <div class="title">🎉 Connexion réussie</div>
+        <p class="success">Authentification validée avec succès.</p>
+        <p>Bienvenue dans votre tableau de bord WebQuest.</p>
+
+        <div class="terminal">
+            <div><span class="prompt">$</span> AUTH /verify</div>
+            <div class="info">→ Token JWT valide</div>
+            <div class="info">→ Accès autorisé</div>
+            <div class="info">→ Chargement des données utilisateur...</div>
+        </div>
+
+        <button class="btn" onclick="window.history.back()">
+            ← Retour à l'exercice
+        </button>
+
+        <div class="version">WebQuest</div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 – Page introuvable · WebQuest</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="/favicon.ico?v=2">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:     #0a0e27;
+            --accent: #00ff88;
+            --glow:   rgba(0,255,136,0.25);
+            --dim:    #8899aa;
+            --text:   #e0e8f0;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+            padding: 40px 20px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        /* Grille de fond animée */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .content { position: relative; z-index: 1; }
+
+        .glitch {
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(64px, 15vw, 120px);
+            color: var(--accent);
+            text-shadow:
+                0 0 30px var(--glow),
+                0 0 60px var(--glow),
+                2px 0 0 rgba(255,0,100,0.5),
+                -2px 0 0 rgba(0,200,255,0.5);
+            animation: glitch 2.5s infinite;
+            line-height: 1;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% {
+                text-shadow:
+                    0 0 30px var(--glow),
+                    0 0 60px var(--glow),
+                    2px 0 0 rgba(255,0,100,0.5),
+                    -2px 0 0 rgba(0,200,255,0.5);
+                transform: translate(0);
+            }
+            92% {
+                text-shadow:
+                    0 0 30px var(--glow),
+                    -4px 0 0 rgba(255,0,100,0.8),
+                    4px 0 0 rgba(0,200,255,0.8);
+                transform: translate(3px, -2px);
+            }
+            94% {
+                text-shadow:
+                    0 0 30px var(--glow),
+                    4px 0 0 rgba(255,0,100,0.8),
+                    -4px 0 0 rgba(0,200,255,0.8);
+                transform: translate(-3px, 2px);
+            }
+            96% {
+                text-shadow:
+                    0 0 30px var(--glow),
+                    2px 0 0 rgba(255,0,100,0.5),
+                    -2px 0 0 rgba(0,200,255,0.5);
+                transform: translate(0);
+            }
+        }
+
+        .title {
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(14px, 3vw, 22px);
+            color: var(--accent);
+            margin-top: 16px;
+            letter-spacing: 0.05em;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: var(--dim);
+            max-width: 480px;
+            line-height: 1.8;
+            margin-top: 8px;
+        }
+
+        .terminal {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(0,255,136,0.2);
+            border-radius: 8px;
+            padding: 20px 28px;
+            font-size: 13px;
+            color: var(--dim);
+            text-align: left;
+            max-width: 460px;
+            width: 100%;
+        }
+
+        .terminal .prompt { color: var(--accent); }
+        .terminal .err    { color: #ff4466; }
+        .terminal .info   { color: #ffaa00; }
+
+        .btn {
+            display: inline-block;
+            padding: 14px 32px;
+            background: var(--accent);
+            color: var(--bg);
+            font-family: 'Space Mono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+            text-decoration: none;
+            border-radius: 6px;
+            box-shadow: 0 0 20px var(--glow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 35px var(--glow);
+        }
+        .btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 4px;
+        }
+
+        .version {
+            font-size: 11px;
+            color: rgba(136,153,170,0.4);
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="glitch">404</div>
+        <div class="title">Page introuvable</div>
+        <p class="subtitle">Cette quête n'existe pas… ou elle a été déplacée dans une autre dimension.</p>
+    </div>
+
+    <div class="terminal" role="log" aria-label="Message d'erreur système">
+        <div><span class="prompt">$</span> GET {{PATH}}</div>
+        <div class="err">Error: 404 Not Found</div>
+        <div class="info">→ La ressource demandée est introuvable.</div>
+        <div class="info">→ Vérifiez l'URL ou retournez à l'accueil.</div>
+    </div>
+
+    <a href="/" class="btn">← Retour à l'accueil</a>
+
+    <div class="version">WebQuest</div>
+
+    <script>
+        // Remplace {{PATH}} par l'URL actuelle
+        document.querySelector('.terminal').innerHTML =
+            document.querySelector('.terminal').innerHTML
+                .replace('{{PATH}}', location.pathname + location.search);
+    </script>
+</body>
+</html>
